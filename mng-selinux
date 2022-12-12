@@ -1,0 +1,84 @@
+#!/usr/bin/bash
+
+STATUS=$(getenforce)
+if [ $STATUS = "Enforcing" ] ; then
+  PRINTRES="selinux работает,"
+else
+  PRINTRES="selinux не работае,"
+fi
+
+#selinuxenabled
+
+cat /etc/selinux/config |grep ^SELINUX=disabled > /dev/null
+onoff=$(echo $?)
+if [ $onoff = 0 ] ; then
+  echo "${PRINTRES} в конфиге не активирован"
+else
+  echo "${PRINTRES} в конфиге активирован"
+fi
+if [ $STATUS = "Permissive" ] ; then
+  echo "включить selinux? y/n"
+  read SEON
+  if [ $SEON = "y" ]
+  then
+    cat /etc/group | grep wheel | grep $USER > /dev/null
+    if [ $? = 0 ] || [ $UID = 0 ] ; then
+      sudo setenforce 1 && echo selinux включен
+    else
+      echo Недостаточно прав для выполнения операции, требуются привилении пользователя root
+    fi
+  fi
+elif [ $STATUS = "Enforcing" ] ; then
+  echo "выключить selinux? y/n"
+  read SEOFF
+  if [ $SEOFF  = "y" ] ; then
+    cat /etc/group | grep wheel | grep $USER > /dev/null
+    if [ $? = 0 ] || [ $UID = 0 ] ; then
+      sudo setenforce 0 && echo selinux выключен
+    else
+      echo Недостаточно прав для выполнения операции, требуются привилении пользователя root
+    fi
+  fi
+fi
+SECFGON=$(echo n)
+SECFGOFF=$(echo n)
+cat /etc/selinux/config | grep ^SELINUX=disabled > /dev/null
+activeFlag=$(echo $?)
+if [ $activeFlag = 0 ] && [ $STATUS = "Disabled" ] ; then
+  echo selinux не был активирован при старте системы
+  echo Активировать selinux в конфиге и выполнить перезагрузку? y/n
+  read SECFGON
+elif [ $activeFlag = 0 ] && [ $STATUS != "Disabled" ] ; then
+  echo selinux был активировани при старте системы, но сейчас не активирован в конфиге
+  echo Активировать selinux в конфиге? y/n
+  read SECFGON
+elif [ $activeFlag != 0 ] ; then
+  echo Деактивировать selinux в конфиге? y/n
+  read SECFGOFF
+fi
+
+if [ $SECFGON = "y" ] ; then
+#   sudo sed 's/minimum/ targeted/w outputfile' /etc/selinux/config'
+   cat /etc/group | grep wheel | grep $USER > /dev/null
+   if [ $? = 0 ] || [ $UID  = 0 ] ; then
+     sudo cat /etc/selinux/config | sed 's/^SELINUX=disabled/SELINUX=enforcing/' > ./config.new
+     sudo cp ./config.new /etc/selinux/config && echo selinux активирован в конфиге
+   else
+     echo Недостаточно прав для выполнения операции, требуется привилегии пользователя root
+   fi
+fi
+if [ $SECFGOFF = "y" ] ; then
+  cat /etc/group | grep wheel | grep $USER > /dev/null
+  if [ $? = 0 ] || [ $UID = 0 ] ; then
+    cat /etc/selinux/config | grep ^SELINUX=enforcing > /dev/null
+    if [ $? = 0 ] ; then
+      sudo cat /etc/selinux/config | sed 's/^SELINUX=enforcing/SELINUX=disabled/' > ./config.new
+    else
+      sudo cat /etc/selinux/config | sed 's/^SELINUX=permissive/SELINUX=disabled/' > ./config.new
+    fi
+    sudo cp ./config.new /etc/selinux/config && echo selinux деактивирован в конфиге
+  else
+    echo недостаточно прав для выполнения операции, требуются привилегии пользователя root
+  fi
+fi
+
